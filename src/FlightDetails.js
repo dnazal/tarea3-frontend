@@ -20,7 +20,7 @@ function FlightDetails({ flight, onBack }) {
 
   const fetchPassengers = async (flightNumber) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/passengers/${flightNumber}`);
+      const response = await fetch(`https://tarea3-backend-render.onrender.com/api/passengers/${flightNumber}`);
       if (!response.ok) {
         throw new Error(`HTTP status ${response.status}`);
       }
@@ -35,7 +35,7 @@ function FlightDetails({ flight, onBack }) {
 
   const fetchAirportDetails = async (airportName) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/airport/${encodeURIComponent(airportName)}`);
+      const response = await fetch(`https://tarea3-backend-render.onrender.com/api/airport/${encodeURIComponent(airportName)}`);
       if (!response.ok) throw new Error('Network response was not ok.');
       const data = await response.json();
       return data; // This should be an object with { name, latitude, longitude }

@@ -15,7 +15,7 @@ function GeneralView({ onFlightSelect }) {
 
   useEffect(() => {
     setIsLoading(true);
-    fetch(`http://localhost:3000/api/flights?page=${currentPage}`)
+    fetch(`https://tarea3-backend-render.onrender.com/api/flights?page=${currentPage}`)
       .then(response => response.json())
       .then(data => {
         setFlightsData(data.flights);
