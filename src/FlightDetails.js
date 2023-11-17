@@ -7,12 +7,15 @@ function FlightDetails({ flight, onBack }) {
   const [originAirportDetails, setOriginAirportDetails] = useState(null);
   const [destinationAirportDetails, setDestinationAirportDetails] = useState(null);
   const [passengers, setPassengers] = useState([]);
+  const [sortCriterion, setSortCriterion] = useState('');
+  const [sortOrder, setSortOrder] = useState('asc');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const passengersPerPage = 15;
   const [error, setError] = useState('');
 
-
-
   const calculateAge = (birthDateString) => {
-    const birthday = new Date(birthDateString.split(' de ').reverse());
+    const birthday = new Date(birthDateString);
     const ageDifMs = Date.now() - birthday.getTime();
     const ageDate = new Date(ageDifMs);
     return Math.abs(ageDate.getUTCFullYear() - 1970);
@@ -25,24 +28,23 @@ function FlightDetails({ flight, onBack }) {
         throw new Error(`HTTP status ${response.status}`);
       }
       const data = await response.json();
-      setPassengers(data); // Make sure your backend is responding with an array here
+      setPassengers(data);
     } catch (error) {
       console.error('Error fetching passengers:', error);
       setError('Failed to load passengers details');
     }
   };
-  
 
   const fetchAirportDetails = async (airportName) => {
     try {
       const response = await fetch(`https://tarea3-backend-render.onrender.com/api/airport/${encodeURIComponent(airportName)}`);
       if (!response.ok) throw new Error('Network response was not ok.');
       const data = await response.json();
-      return data; // This should be an object with { name, latitude, longitude }
+      return data;
     } catch (error) {
       console.error('Error fetching airport details:', error);
       setError('Failed to load airport details');
-      return null; // or you can return a default object
+      return null;
     }
   };
 
@@ -52,7 +54,59 @@ function FlightDetails({ flight, onBack }) {
       fetchAirportDetails(flight.destinationAirport).then(setDestinationAirportDetails);
       fetchPassengers(flight.flightNumber);
     }
-  }, [flight]); // Rerun when flight changes
+  }, [flight]);
+
+  const sortPassengers = (data) => {
+    if (!sortCriterion) return data;
+    return [...data].sort((a, b) => {
+      let valueA = a[sortCriterion];
+      let valueB = b[sortCriterion];
+
+      if (sortCriterion === 'weight(kg)' || sortCriterion === 'height(cm)') {
+        valueA = parseFloat(valueA);
+        valueB = parseFloat(valueB);
+      } else if (sortCriterion === 'birthDate') {
+        valueA = calculateAge(valueA);
+        valueB = calculateAge(valueB);
+      }
+
+      if (sortOrder === 'asc') {
+        return valueA < valueB ? -1 : 1;
+      }
+      return valueA > valueB ? -1 : 1;
+    });
+  };
+
+  const filterPassengers = (data) => {
+    if (!searchTerm) return data;
+    return data.filter(passenger =>
+      `${passenger.firstName} ${passenger.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  };
+
+  const changeSort = (criterion) => {
+    if (sortCriterion === criterion) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortCriterion(criterion);
+      setSortOrder('asc');
+    }
+  };
+
+  const displayPassengers = sortPassengers(filterPassengers(passengers));
+
+  const indexOfLastPassenger = currentPage * passengersPerPage;
+  const indexOfFirstPassenger = indexOfLastPassenger - passengersPerPage;
+  const currentPassengers = displayPassengers.slice(indexOfFirstPassenger, indexOfLastPassenger);
+  const totalPages = Math.ceil(displayPassengers.length / passengersPerPage);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
 
   if (!flight) {
     return <div>No Flight Selected</div>;
@@ -66,17 +120,13 @@ function FlightDetails({ flight, onBack }) {
     return <div>Loading airport details...</div>;
   }
 
-  // Define positions for origin and destination airports
   const positionOrigin = [originAirportDetails.latitude, originAirportDetails.longitude];
   const positionDestination = [destinationAirportDetails.latitude, destinationAirportDetails.longitude];
-
-  // Define polyline for flight path
   const polyline = [positionOrigin, positionDestination];
 
-  // Custom icon for markers (optional)
   const customIcon = L.icon({
-    iconUrl: 'airplane-icon.png', // Replace with your icon path
-    iconSize: [25, 25], // Size of the icon
+    iconUrl: 'airplane-icon.png',
+    iconSize: [25, 25],
   });
 
   return (
@@ -118,41 +168,51 @@ function FlightDetails({ flight, onBack }) {
       </div>
       <div>
         <h3>Passengers</h3>
+        <input 
+          type="text" 
+          placeholder="Search Passengers..." 
+          value={searchTerm} 
+          onChange={e => setSearchTerm(e.target.value)}
+        />
         <table>
           <thead>
             <tr>
               <th>Avatar</th>
-              <th>Full Name</th>
-              <th>Age</th>
-              <th>Gender</th>
-              <th>Weight (kg)</th>
-              <th>Height (cm)</th>
+              <th onClick={() => changeSort('firstName')}>Full Name</th>
+              <th onClick={() => changeSort('birthDate')}>Age</th>
+              <th onClick={() => changeSort('gender')}>Gender</th>
+              <th onClick={() => changeSort('weight(kg)')}>Weight (kg)</th>
+              <th onClick={() => changeSort('height(cm)')}>Height (cm)</th>
             </tr>
           </thead>
           <tbody>
-            {passengers.length > 0 ? (
-              passengers.map((passenger) => (
-                <tr key={passenger.passengerID}>
-                  <td>
-                    <img src={passenger.avatar} alt={`${passenger.firstName} ${passenger.lastName}`} style={{ width: '50px', height: '50px' }} />
-                  </td>
-                  <td>{`${passenger.firstName} ${passenger.lastName}`}</td>
-                  <td>{calculateAge(passenger.birthDate)}</td>
-                  <td>{passenger.gender}</td>
-                  <td>{passenger['weight(kg)']}</td>
-                  <td>{passenger['height(cm)']}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="6">Loading passengers...</td>
+            {currentPassengers.map((passenger) => (
+              <tr key={passenger.passengerID}>
+                <td>
+                  <img src={passenger.avatar} alt={`${passenger.firstName} ${passenger.lastName}`} style={{ width: '50px', height: '50px' }} />
+                </td>
+                <td>{`${passenger.firstName} ${passenger.lastName}`}</td>
+                <td>{calculateAge(passenger.birthDate)}</td>
+                <td>{passenger.gender}</td>
+                <td>{passenger['weight(kg)']}</td>
+                <td>{passenger['height(cm)']}</td>
               </tr>
-            )}
+            ))}
           </tbody>
         </table>
+        <div>
+          <button onClick={handlePrevPage} disabled={currentPage === 1}>
+            Previous
+          </button>
+          <span>Page {currentPage} of {totalPages}</span>
+          <button onClick={handleNextPage} disabled={currentPage === totalPages}>
+            Next
+            </button>
+        </div>
       </div>
     </div>
   );
+  
 }
 
 export default FlightDetails;
